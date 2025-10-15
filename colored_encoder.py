@@ -152,6 +152,18 @@ class DeviceColoredEncoderElement(ColoredEncoderElement):
             self._send_led_color(self._device_column_color())
         super()._parameter_value_changed()
 
+    def connect_to(self, parameter):
+        # Ensure our column color overrides any default color update during mapping
+        super().connect_to(parameter)
+        if self.is_mapped_to_parameter():
+            self._send_led_color(self._device_column_color())
+
+    def _update_parameter_listeners(self):
+        # Run base (which triggers our _update_led_color), then assert our color again
+        super()._update_parameter_listeners()
+        if self.is_mapped_to_parameter():
+            self._send_led_color(self._device_column_color())
+
 
 class MixerColoredEncoderElement(ColoredEncoderElement):
     """Encoder for Mixer mode.
