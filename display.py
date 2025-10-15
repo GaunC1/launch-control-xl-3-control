@@ -46,14 +46,30 @@ class DisplayContent:
         def parameter_header(element, control_type):
             if (control_type == ControlType.faders or state.encoder_modes.selected_mode == 'daw_mixer') and liveobj_valid(element.mapped_object.canonical_parent):
                 return liveobj_name(find_parent_track(element.mapped_object))
-            if control_type == ControlType.lower_encoders:
+            if control_type == ControlType.lower_encoders and state.encoder_modes.selected_mode == 'daw_mixer':
                 return 'Transport'
             return liveobj_name(state.target_track.target_track)
 
         def parameter_content(elements, control_type):
             encoder_offset = 16 if control_type == ControlType.lower_encoders else 0
             return tuple((TargetContent(config=Config.three_line, lines=(parameter_header(element, control_type), display_name(element.mapped_object), str(element.mapped_object)) if liveobj_valid(element.mapped_object) else ('-', '-', '-'), trigger=control_type != ControlType.faders and i + encoder_offset == released_encoder_index) for i, element in enumerate(elements)))
-        return cls(upper_encoders=parameter_content(list(flatten(state.elements.upper_encoders)), ControlType.upper_encoders), lower_encoders=parameter_content(state.elements.lower_encoders, ControlType.lower_encoders), faders=parameter_content(state.elements.faders, ControlType.faders), **k)
+        
+        # Get the actual encoder elements that are physically present
+        # In DAW Control mode, all_device_encoders contains all 24 encoders
+        # In DAW Mixer mode, upper_encoders and lower_encoders are used separately
+        # The display should always show what the physical encoders are mapped to
+        
+        if state.encoder_modes.selected_mode == 'daw_control':
+            # Read from all_device_encoders which is what's actually mapped in DAW Control mode
+            all_device_encoders_flat = list(flatten(state.elements.all_device_encoders))
+            upper_encoder_content = parameter_content(all_device_encoders_flat[:16], ControlType.upper_encoders)
+            lower_encoder_content = parameter_content(all_device_encoders_flat[16:24], ControlType.lower_encoders)
+        else:
+            # In DAW Mixer mode, use the separate encoder groups
+            upper_encoder_content = parameter_content(list(flatten(state.elements.upper_encoders)), ControlType.upper_encoders)
+            lower_encoder_content = parameter_content(state.elements.lower_encoders, ControlType.lower_encoders)
+        
+        return cls(upper_encoders=upper_encoder_content, lower_encoders=lower_encoder_content, faders=parameter_content(state.elements.faders, ControlType.faders), **k)
 
 class Notifications(DefaultNotifications):
     generic = DefaultNotifications.DefaultText()

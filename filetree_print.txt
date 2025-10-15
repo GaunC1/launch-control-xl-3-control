@@ -1,0 +1,730 @@
+=========================================
+FILE: __init__.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/__init__.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from ableton.v3.base import task
+from ableton.v3.control_surface import ControlSurface, ControlSurfaceSpecification, create_skin
+from ableton.v3.control_surface.capabilities import AUTO_LOAD_KEY, CONTROLLER_ID_KEY, PORTS_KEY, SCRIPT, SYNC, controller_id, inport, outport
+from Launchkey_MK4.cue_point import CuePointComponent
+from Launchkey_MK4.encoder_touch import EncoderTouchComponent
+from Launchkey_MK4.zoom import ZoomComponent
+from . import midi
+from .device import DeviceComponent
+from .display import display_specification
+from .elements import Elements
+from .mappings import create_mappings
+from .mixer import MixerComponent
+from .session_navigation import SessionNavigationComponent
+from .session_ring import SessionRingComponent
+from .skin import Rgb, Skin
+from .transport import TransportComponent
+SYSEX_FLUSH_THRESHOLD = 10
+SYSEX_DISPLAY_ID_LENGTH = 9
+
+def get_capabilities():
+    return {CONTROLLER_ID_KEY: controller_id(vendor_id=4661, product_ids=[328 + i for i in range(8)], model_name=['LCXL3 {}'.format(i) for i in range(1, 9)]), PORTS_KEY: [inport(), inport(props=[SCRIPT]), outport(), outport(props=[SYNC, SCRIPT])], AUTO_LOAD_KEY: True}
+
+def create_instance(c_instance):
+    return Launch_Control_XL_3(specification=Specification, c_instance=c_instance)
+
+class Specification(ControlSurfaceSpecification):
+    elements_type = Elements
+    control_surface_skin = create_skin(skin=Skin, colors=Rgb)
+    link_session_ring_to_track_selection = True
+    session_ring_component_type = SessionRingComponent
+    create_mappings_function = create_mappings
+    identity_response_id_bytes = (0, 32, 41, -1, 1, 0, 1)
+    hello_messages = (midi.make_connection_message(), midi.make_enable_touch_output_message())
+    goodbye_messages = (midi.make_connection_message(connect=False),)
+    display_specification = display_specification
+    component_map = {'Cue_Point': CuePointComponent, 'Device': DeviceComponent, 'Encoder_Touch': EncoderTouchComponent, 'Mixer': MixerComponent, 'Session_Navigation': SessionNavigationComponent, 'Transport': TransportComponent, 'Zoom': ZoomComponent}
+
+class Launch_Control_XL_3(ControlSurface):
+
+    def __init__(self, *a, **k):
+        self._should_delay_flushing_display_messages = False
+        super().__init__(*a, **k)
+
+    def port_settings_changed(self):
+        self._send_midi(midi.make_connection_message(connect=False))
+        super().port_settings_changed()
+
+    def send_midi(self, midi_bytes):
+        self._send_midi(midi_bytes)
+
+    def on_identified(self, response_bytes):
+        self._should_delay_flushing_display_messages = False
+        self._tasks.add(task.sequence(task.delay(1), task.run(lambda: setattr(self, '_should_delay_flushing_display_messages', True))))
+        super().on_identified(response_bytes)
+        with self.component_guard():
+            self.component_map['Encoder_Modes'].selected_mode = 'daw_mixer'
+
+    def _flush_midi_messages(self):
+        if self._should_delay_flushing_display_messages and len(self._midi_message_list) > SYSEX_FLUSH_THRESHOLD:
+            filtered_messages = {m[:SYSEX_DISPLAY_ID_LENGTH]: m for _, m in self._midi_message_list}
+            for i, message in enumerate(filtered_messages.values()):
+                self._tasks.add(task.sequence(task.delay(i * 0.01), task.run(self._do_send_midi, message)))
+            self._midi_message_list[:] = []
+        super()._flush_midi_messages()
+
+=========================================
+FILE: colored_encoder.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/colored_encoder.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from Live.Device import Device
+from Live.MixerDevice import MixerDevice
+from ableton.v2.control_surface import LiveObjectDecorator
+from ableton.v3.control_surface.elements import EncoderElement
+from ableton.v3.control_surface.midi import CC_STATUS
+from .colors import Rgb
+
+def get_color_for_parameter(parameter):
+    pass
+    parent = parameter.canonical_parent
+    if isinstance(parent, (Device, LiveObjectDecorator)):
+        return Rgb.PURPLE
+    if isinstance(parent, MixerDevice):
+        return Rgb.TURQUOISE
+    if 'Loop' in parameter.name:
+        return Rgb.YELLOW
+    if 'Vertical' in parameter.name:
+        return Rgb.TURQUOISE
+    if 'Tempo' in parameter.name:
+        return Rgb.ORANGE
+    return Rgb.WHITE
+
+def get_color_for_pan_value(value):
+    pass
+    if 'R' in value:
+        return Rgb.ORANGE
+    if 'L' in value:
+        return Rgb.DARK_BLUE
+    return Rgb.WHITE_HALF
+
+class ColoredEncoderElement(EncoderElement):
+    pass
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self._led_color_cc = self.message_identifier() - 64
+        self._is_assigned_to_pan = False
+        self._last_sent_message = None
+
+    def reset(self):
+        self._send_led_color(Rgb.OFF)
+
+    def connect_to(self, parameter):
+        # Called when encoder is connected to a parameter
+        super().connect_to(parameter)
+        # Force LED update after connection
+        self._update_led_color()
+
+    def release_parameter(self):
+        # Called when encoder is disconnected from a parameter
+        super().release_parameter()
+        # Turn off LED when released
+        self._send_led_color(Rgb.OFF)
+
+    def _update_led_color(self):
+        # Update LED based on current parameter mapping
+        self._is_assigned_to_pan = False
+        if self.is_mapped_to_parameter():
+            self._is_assigned_to_pan = self.mapped_object.name == 'Track Panning'
+            if not self._is_assigned_to_pan:
+                self._send_led_color(get_color_for_parameter(self.mapped_object))
+            else:
+                self._send_led_color(get_color_for_pan_value(self.parameter_value))
+        else:
+            self._send_led_color(Rgb.OFF)
+
+    def _update_parameter_listeners(self):
+        self._update_led_color()
+        super()._update_parameter_listeners()
+
+    def _send_led_color(self, color):
+        message = (CC_STATUS, self._led_color_cc, color.midi_value)
+        self.send_midi(message)
+        self._last_sent_message = message
+
+    def _parameter_value_changed(self):
+        if self._is_assigned_to_pan:
+            self._send_led_color(get_color_for_pan_value(self.parameter_value))
+        super()._parameter_value_changed()
+
+=========================================
+FILE: colors.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/colors.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from ableton.v3.base import memoize
+from ableton.v3.control_surface import STANDARD_COLOR_PALETTE, STANDARD_FALLBACK_COLOR_TABLE
+from ableton.v3.control_surface.elements import ColorPart, ComplexColor, SimpleColor
+from ableton.v3.live import liveobj_color_to_value_from_palette, liveobj_valid
+BLINK_CHANNEL = 1
+
+@memoize
+def make_simple_color(value):
+    return SimpleColor(value)
+
+def make_color_for_liveobj(obj):
+    color = make_simple_color(liveobj_color_to_value_from_palette(obj, palette=STANDARD_COLOR_PALETTE, fallback_table=STANDARD_FALLBACK_COLOR_TABLE))
+    if liveobj_valid(obj) and (not color.midi_value):
+        return Rgb.WHITE_HALF
+    return color
+
+def make_animated_color(value, animation_channel):
+    return ComplexColor((ColorPart(value), ColorPart(0, animation_channel)))
+
+class Rgb:
+    OFF = SimpleColor(0)
+    WHITE = SimpleColor(3)
+    WHITE_HALF = SimpleColor(1)
+    GREEN = SimpleColor(21)
+    GREEN_HALF = SimpleColor(27)
+    RED = SimpleColor(5)
+    RED_HALF = SimpleColor(7)
+    RED_BLINK = make_animated_color(5, BLINK_CHANNEL)
+    BLUE = SimpleColor(41)
+    BLUE_HALF = SimpleColor(43)
+    ORANGE = SimpleColor(96)
+    ORANGE_HALF = SimpleColor(83)
+    YELLOW = SimpleColor(97)
+    PURPLE = SimpleColor(53)
+    TURQUOISE = SimpleColor(39)
+    DARK_BLUE = SimpleColor(47)
+
+=========================================
+FILE: device.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/device.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from ableton.v3.control_surface.components import DeviceBankNavigationComponent as DeviceBankNavigationComponentBase
+from ableton.v3.control_surface.components import DeviceComponent as DeviceComponentBase
+
+class DeviceBankNavigationComponent(DeviceBankNavigationComponentBase):
+    pass
+
+    def _notify_bank_name(self):
+        bank_names = self._banking_info.device_bank_names(self._bank_provider.device, bank_name_join_str='\n')[self._bank_provider.index].split('\n')
+        self.notify(self.notifications.Device.bank, '{}\n{}\n{}'.format(self._bank_provider.device.name, bank_names[0], bank_names[1] if len(bank_names) > 1 else '-'))
+
+class DeviceComponent(DeviceComponentBase):
+    pass
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, bank_size=24, bank_navigation_component_type=DeviceBankNavigationComponent, quantized_parameter_sensitivity=0.5, **k)
+
+=========================================
+FILE: display.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/display.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from dataclasses import dataclass
+from enum import IntEnum
+from functools import partial
+from typing import Optional, Tuple
+from ableton.v3.base import flatten
+from ableton.v3.control_surface.display import DefaultNotifications, DisplaySpecification, Text, view
+from ableton.v3.live import display_name, find_parent_track, liveobj_name, liveobj_valid
+DisplayText = partial(Text, max_width=16, justification=Text.Justification.NONE)
+
+class ControlType(IntEnum):
+    pass
+    faders = 0
+    upper_encoders = 1
+    lower_encoders = 2
+
+class Config(IntEnum):
+    pass
+    two_line = 97
+    three_line = 98
+
+@dataclass
+class TargetContent:
+    pass
+    config: Optional[Config] = Config.two_line
+    lines: Optional[Tuple[str, ...]] = ()
+    trigger: Optional[bool] = False
+
+@dataclass
+class DisplayContent:
+    pass
+    static: Optional[TargetContent] = None
+    temp: Optional[TargetContent] = None
+    encoders: Tuple[Optional[Tuple[TargetContent, TargetContent]], ...] = ()
+    upper_encoders: Tuple[Optional[Tuple[TargetContent, TargetContent]], ...] = ()
+    lower_encoders: Tuple[Optional[Tuple[TargetContent, TargetContent]], ...] = ()
+    faders: Tuple[Optional[Tuple[TargetContent, TargetContent]], ...] = ()
+
+    @classmethod
+    def with_parameters(cls, state, released_encoder_index=None, **k):
+
+        def parameter_header(element, control_type):
+            if (control_type == ControlType.faders or state.encoder_modes.selected_mode == 'daw_mixer') and liveobj_valid(element.mapped_object.canonical_parent):
+                return liveobj_name(find_parent_track(element.mapped_object))
+            if control_type == ControlType.lower_encoders and state.encoder_modes.selected_mode == 'daw_mixer':
+                return 'Transport'
+            return liveobj_name(state.target_track.target_track)
+
+        def parameter_content(elements, control_type):
+            encoder_offset = 16 if control_type == ControlType.lower_encoders else 0
+            return tuple((TargetContent(config=Config.three_line, lines=(parameter_header(element, control_type), display_name(element.mapped_object), str(element.mapped_object)) if liveobj_valid(element.mapped_object) else ('-', '-', '-'), trigger=control_type != ControlType.faders and i + encoder_offset == released_encoder_index) for i, element in enumerate(elements)))
+        
+        # Get the actual encoder elements that are physically present
+        # In DAW Control mode, all_device_encoders contains all 24 encoders
+        # In DAW Mixer mode, upper_encoders and lower_encoders are used separately
+        # The display should always show what the physical encoders are mapped to
+        
+        if state.encoder_modes.selected_mode == 'daw_control':
+            # Read from all_device_encoders which is what's actually mapped in DAW Control mode
+            all_device_encoders_flat = list(flatten(state.elements.all_device_encoders))
+            upper_encoder_content = parameter_content(all_device_encoders_flat[:16], ControlType.upper_encoders)
+            lower_encoder_content = parameter_content(all_device_encoders_flat[16:24], ControlType.lower_encoders)
+        else:
+            # In DAW Mixer mode, use the separate encoder groups
+            upper_encoder_content = parameter_content(list(flatten(state.elements.upper_encoders)), ControlType.upper_encoders)
+            lower_encoder_content = parameter_content(state.elements.lower_encoders, ControlType.lower_encoders)
+        
+        return cls(upper_encoders=upper_encoder_content, lower_encoders=lower_encoder_content, faders=parameter_content(state.elements.faders, ControlType.faders), **k)
+
+class Notifications(DefaultNotifications):
+    generic = DefaultNotifications.DefaultText()
+    identify = DefaultNotifications.TransformDefaultText(lambda x: '\n{}'.format(x.replace('Connected', '')))
+
+    class Device(DefaultNotifications.Device):
+        bank = DefaultNotifications.DefaultText()
+
+    class Modes(DefaultNotifications.Modes):
+        select = lambda _, mode_name: 'mode:{}'.format(mode_name)
+
+def render_mode_notification(mode):
+    if mode in ['solo', 'arm', 'mute', 'track_select']:
+        return DisplayContent(temp=TargetContent(lines=('Button Function', mode.replace('_', ' ').title())))
+    return None
+
+def render_notification(_, notification_text):
+    if notification_text.startswith('mode:'):
+        return render_mode_notification(notification_text.replace('mode:', ''))
+    if '\n' in notification_text:
+        lines = tuple(notification_text.split('\n'))
+        return DisplayContent(temp=TargetContent(config=Config.three_line if len(lines) == 3 else Config.two_line, lines=lines))
+    return None
+
+def create_root_view() -> view.View[Optional[DisplayContent]]:
+
+    @view.View
+    def main_view(state) -> Optional[DisplayContent]:
+        if state.encoder_touch.last_released_index is not None:
+            return DisplayContent.with_parameters(state, released_encoder_index=state.encoder_touch.last_released_index)
+        return DisplayContent.with_parameters(state, static=TargetContent(config=Config.three_line, lines=(state.session_navigation.track_range_string, liveobj_name(state.target_track.target_track), liveobj_name(state.device.device) or '-')))
+    return view.CompoundView(view.DisconnectedView(), view.NotificationView(render_notification, duration=0.1, supports_new_line=True), main_view)
+
+def protocol(elements):
+
+    def display(content: DisplayContent):
+        if content:
+            display_content('static', content.static, show_immediately=True)
+            display_content('temp', content.temp, show_immediately=True)
+            for i, encoder in enumerate(content.upper_encoders):
+                display_content('upper_encoder_{}'.format(i), encoder)
+            for i, encoder in enumerate(content.lower_encoders):
+                display_content('lower_encoder_{}'.format(i), encoder)
+            for i, fader in enumerate(content.faders):
+                display_content('fader_{}'.format(i), fader)
+
+    def display_content(name, content: TargetContent, show_immediately=False):
+        if content and content.lines:
+            command = getattr(elements, '{}_display_command'.format(name))
+            command.send_data(content.config, tuple((DisplayText(line).as_ascii() for line in content.lines)), show_immediately=show_immediately, trigger=content.trigger)
+    return display
+display_specification = DisplaySpecification(create_root_view=create_root_view, protocol=protocol, notifications=Notifications)
+
+=========================================
+FILE: elements.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/elements.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from ableton.v3.base import nop
+from ableton.v3.control_surface import ElementsBase, MapMode
+from Launchkey_MK4.display_target import DisplayTargetElement
+from . import midi
+from .colored_encoder import ColoredEncoderElement
+
+class Elements(ElementsBase):
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.add_modifier_button(63, 'Shift_Button', channel=6)
+        self.add_button(30, 'Encoder_Mode_Element', channel=6)
+        self.add_button(31, 'Encoder_User_Mode_Element', channel=6)
+        self.add_button(65, 'Daw_Control_Mode_Button')
+        self.add_button(66, 'Daw_Mixer_Mode_Button')
+        self.add_button(102, 'Track_Right_Button')
+        self.add_button(103, 'Track_Left_Button')
+        self.add_button(104, 'Novation_Button')
+        self.add_button(106, 'Page_Up_Button')
+        self.add_button(107, 'Page_Down_Button')
+        self.add_button(116, 'Play_Button')
+        self.add_button(118, 'Record_Button')
+        self.add_button_matrix([range(37, 45)], 'Daw_Control_Buttons')
+        self.add_button_matrix([range(45, 53)], 'Daw_Mixer_Buttons')
+        self.add_modified_control(control=self.play_button, modifier=self.shift_button)
+        self.add_modified_control(control=self.track_right_button, modifier=self.shift_button)
+        self.add_modified_control(control=self.track_left_button, modifier=self.shift_button)
+        self.add_modified_control(control=self.page_up_button, modifier=self.shift_button)
+        self.add_modified_control(control=self.page_down_button, modifier=self.shift_button)
+        self.add_encoder_matrix([range(5, 13)], 'Faders', channels=15)
+        self.add_button_matrix([range(5, 13)], 'Fader_Touch_Elements', channels=14, is_private=True)
+        self.add_matrix([range(77, 85), range(85, 93)], 'Upper_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
+        self.add_matrix([range(93, 101)], 'Lower_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
+        
+        # Create combined encoder matrix for device control (all 24 encoders)
+        self.add_matrix([range(77, 85), range(85, 93), range(93, 101)], 'All_Device_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
+        
+        self.add_button_matrix([range(77, 101)], 'Encoder_Touch_Elements', channels=14, is_private=True)
+        
+        self.add_sysex_element(midi.make_connection_message()[:-2], 'Connection_Element')
+        self.add_display_command_for_target('Static', 53, 9)
+        self.add_display_command_for_target('Temp', 54, 3, disable_caching=True)
+        for i in range(8):
+            self.add_display_command_for_target('Fader_{}'.format(i), 5 + i, 3)
+        for i in range(16):
+            self.add_display_command_for_target('Upper_Encoder_{}'.format(i), 13 + i, 3)
+        for i in range(8):
+            self.add_display_command_for_target('Lower_Encoder_{}'.format(i), 29 + i, 3)
+        self.encoder_mode_element.send_value = nop
+    pass
+
+    def add_display_command_for_target(self, name, target, num_fields, disable_caching=False):
+        self.add_element('{}_Display_Command'.format(name), DisplayTargetElement, midi.SYSEX_HEADER, target, num_fields, disable_caching=disable_caching)
+
+=========================================
+FILE: mappings.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/mappings.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from ableton.v3.control_surface.mode import ImmediateBehaviour, make_reenter_behaviour
+from Launchkey_MK4.launchkey_modes import LaunchkeyModesComponent
+from .midi import SET_RELATIVE_ENCODER_MODES
+
+def set_relative_encoder_mode(control_surface):
+    pass
+
+    def send_messages():
+        for msg in SET_RELATIVE_ENCODER_MODES:
+            control_surface.send_midi(msg)
+    return send_messages
+
+def make_relative_encoder_mode_behavior(control_surface):
+    pass
+    return make_reenter_behaviour(ImmediateBehaviour, on_reenter=set_relative_encoder_mode(control_surface))
+
+def create_mappings(control_surface):
+    mappings = {}
+    mappings['Transport'] = dict(play_toggle_button='play_button', play_pause_button='play_button_with_shift')
+    mappings['View_Based_Recording'] = dict(record_button='record_button')
+    mappings['Mixer'] = dict(volume_controls='faders')
+    mappings['View_Control'] = dict(prev_track_button='track_left_button', next_track_button='track_right_button')
+    mappings['Session_Navigation'] = dict(page_left_button='track_left_button_with_shift', page_right_button='track_right_button_with_shift')
+    mappings['Encoder_Touch'] = dict(touch_controls='encoder_touch_elements')
+    mappings['Daw_Control_Button_Modes'] = dict(cycle_mode_button='daw_control_mode_button', solo=dict(component='Mixer', solo_buttons='daw_control_buttons'), arm=dict(component='Mixer', arm_buttons='daw_control_buttons'))
+    mappings['Daw_Mixer_Button_Modes'] = dict(cycle_mode_button='daw_mixer_mode_button', mute=dict(component='Mixer', mute_buttons='daw_mixer_buttons'), track_select=dict(component='Mixer', track_select_buttons='daw_mixer_buttons'))
+    mappings['Encoder_Modes'] = dict(modes_component_type=LaunchkeyModesComponent, is_private=True, mode_selection_control='encoder_mode_element', null_0=None, daw_mixer=dict(modes=[dict(component='Mixer', send_controls='upper_encoders', pan_controls='lower_encoders', prev_send_index_button='page_up_button', next_send_index_button='page_down_button'), set_relative_encoder_mode(control_surface)], behaviour=make_relative_encoder_mode_behavior(control_surface)), daw_control=dict(modes=[dict(component='Device', parameter_controls='all_device_encoders', prev_bank_button='page_up_button', next_bank_button='page_down_button'), dict(component='Device_Navigation', prev_button='page_up_button_with_shift', next_button='page_down_button_with_shift'), set_relative_encoder_mode(control_surface)], behaviour=make_relative_encoder_mode_behavior(control_surface)), null_3=None, null_4=None, null_5=None, null_6=None, null_7=None, null_8=None)
+    return mappings
+
+=========================================
+FILE: midi.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/midi.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from ableton.v3.control_surface.midi import SYSEX_END, SYSEX_START
+SYSEX_HEADER = (SYSEX_START, 0, 32, 41, 2, 21)
+SET_RELATIVE_ENCODER_MODES = ((182, 69, 127), (182, 72, 127), (182, 73, 127))
+
+def make_connection_message(connect=True):
+    pass
+    return SYSEX_HEADER + (2, 127 if connect else 0, SYSEX_END)
+    pass
+
+def make_enable_touch_output_message():
+    pass
+    return (182, 71, 127)
+
+=========================================
+FILE: mixer.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/mixer.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-10-06 14:22:16 UTC (1759760536)
+
+from ableton.v3.control_surface.components import MixerComponent as MixerComponentBase
+from ableton.v3.control_surface.components import SendIndexControlComponent as SendIndexControlComponentBase
+
+class SendIndexControlComponent(SendIndexControlComponentBase):
+    pass
+
+    def _get_send_range_string(self):
+        send_index = self.send_index
+        num_sends = self.num_sends
+        first_send_name = self._song.return_tracks[send_index].name
+        if send_index == num_sends - 1:
+            return '{}\n-'.format(first_send_name)
+        else:
+            return '{}\n{}'.format(first_send_name, self._song.return_tracks[send_index + 1].name)
+
+    def _notify_send_range(self, _):
+        self.notify(self.notifications.generic, 'Sends\n{}'.format(self._get_send_range_string()))
+
+class MixerComponent(MixerComponentBase):
+    pass
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, send_index_control_component_type=SendIndexControlComponent, **k)
+
+=========================================
+FILE: session_navigation.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/session_navigation.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from ableton.v3.base import depends, find_if, listenable_property
+from ableton.v3.control_surface.components import SessionNavigationComponent as SessionNavigationComponentBase
+from ableton.v3.control_surface.controls import ButtonControl
+from ableton.v3.control_surface.display import Renderable
+from ableton.v3.live import action, liveobj_valid, simple_track_name
+
+class SessionNavigationComponent(SessionNavigationComponentBase, Renderable):
+    pass
+    page_left_button = ButtonControl(color='Session.Navigation', pressed_color='Session.NavigationPressed')
+    page_right_button = ButtonControl(color='Session.Navigation', pressed_color='Session.NavigationPressed')
+    track_range_string = listenable_property.managed('')
+
+    @depends(session_ring=None)
+    def __init__(self, session_ring=None, *a, **k):
+        super().__init__(*a, session_ring=session_ring, snap_track_offset=True, **k)
+        self._session_ring = session_ring
+        self.register_slot(self._page_horizontal.scrollable, self._on_tracks_scrolled, 'scrolled')
+        self.register_slot(self._scroll_horizontal.scrollable, self._on_tracks_scrolled, 'scrolled')
+        self.register_slot(session_ring, self._on_tracks_changed, 'tracks')
+        self._on_tracks_changed()
+
+    def set_page_left_button(self, button):
+        self.page_left_button.set_control_element(button)
+
+    def set_page_right_button(self, button):
+        self.page_right_button.set_control_element(button)
+
+    @page_left_button.pressed
+    def page_left_button(self, _):
+        if self._page_horizontal.can_scroll_up():
+            self._page_horizontal.scroll_up()
+        elif self._can_page_left:
+            self._session_ring.is_controlling_returns = False
+            self._on_tracks_scrolled()
+
+    @page_right_button.pressed
+    def page_right_button(self, _):
+        if self._page_horizontal.can_scroll_down():
+            self._page_horizontal.scroll_down()
+        elif self._can_page_right:
+            self._session_ring.is_controlling_returns = True
+            self._on_tracks_scrolled()
+
+    @property
+    def _can_page_left(self):
+        return self._page_horizontal.can_scroll_up() or self._session_ring.is_controlling_returns
+
+    @property
+    def _can_page_right(self):
+        return self._page_horizontal.can_scroll_down() or (not self._session_ring.is_controlling_returns and self._session_ring.can_control_returns)
+
+    def _on_tracks_scrolled(self):
+        if self._session_ring.track_offset in range(len(self._session_ring.tracks_to_use())):
+            action.select(self._session_ring.tracks_to_use()[self._session_ring.track_offset])
+
+    def _on_tracks_changed(self):
+        self.page_left_button.enabled = self._can_page_left
+        self.page_right_button.enabled = self._can_page_right
+        self.track_range_string = self._get_track_range_string()
+
+    def _get_track_range_string(self):
+        header = 'Return' if self._session_ring.is_controlling_returns else 'Track'
+        tracks = self._session_ring.tracks
+        first_track = find_if(liveobj_valid, tracks)
+        last_track = find_if(liveobj_valid, reversed(tracks))
+        if first_track == last_track:
+            return '{} {}'.format(header, simple_track_name(first_track))
+        return '{}s {}-{}'.format(header, simple_track_name(first_track), simple_track_name(last_track))
+
+=========================================
+FILE: session_ring.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/session_ring.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+import math
+from ableton.v3.control_surface.components import SessionRingComponent as SessionRingComponentBase
+
+class SessionRingComponent(SessionRingComponentBase):
+    pass
+
+    def __init__(self, *a, **k):
+        self._is_controlling_returns = False
+        super().__init__(*a, **k)
+
+    @property
+    def can_control_returns(self):
+        pass
+        return bool(self.song.return_tracks)
+
+    @property
+    def is_controlling_returns(self):
+        pass
+        return self._is_controlling_returns
+
+    @is_controlling_returns.setter
+    def is_controlling_returns(self, control_returns):
+        control_returns = self.can_control_returns and control_returns
+        if control_returns != self._is_controlling_returns:
+            self._is_controlling_returns = control_returns
+            self._update_tracks_to_use()
+
+    def _update_tracks_to_use(self):
+        self._tracks_to_use = lambda: self.song.return_tracks if self._is_controlling_returns else self.song.visible_tracks
+        self._update_track_list()
+        if self._is_controlling_returns:
+            self.track_offset = 0
+        else:
+            last_bank_index = math.ceil(len(self.tracks_to_use()) / self.num_tracks) - 1
+            self.track_offset = last_bank_index * self.num_tracks
+
+    def _update_track_list(self):
+        if self._is_controlling_returns and (not self.can_control_returns):
+            self.is_controlling_returns = False
+        else:
+            super()._update_track_list()
+
+=========================================
+FILE: skin.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/skin.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from .colors import Rgb, make_color_for_liveobj
+
+class Skin:
+
+    class Transport:
+        PlayOn = Rgb.GREEN
+        PlayOff = Rgb.GREEN_HALF
+
+    class Recording:
+        ArrangementRecordOn = Rgb.RED
+        ArrangementRecordOff = Rgb.RED_HALF
+        SessionRecordOn = Rgb.RED
+        SessionRecordOff = Rgb.RED_HALF
+        SessionRecordTransition = Rgb.RED_BLINK
+
+    class ViewControl:
+        TrackPressed = Rgb.WHITE
+        Track = Rgb.WHITE_HALF
+
+    class Session:
+        NavigationPressed = Rgb.WHITE
+        Navigation = Rgb.WHITE_HALF
+
+    class Device:
+        NavigationPressed = Rgb.WHITE
+        Navigation = Rgb.WHITE_HALF
+
+        class Bank:
+            NavigationPressed = Rgb.WHITE
+            Navigation = Rgb.WHITE_HALF
+
+    class Mixer:
+        ArmOn = Rgb.RED
+        ArmOff = Rgb.RED_HALF
+        MuteOn = Rgb.ORANGE_HALF
+        MuteOff = Rgb.ORANGE
+        SoloOn = Rgb.BLUE
+        SoloOff = Rgb.BLUE_HALF
+        Selected = Rgb.WHITE
+        NotSelected = make_color_for_liveobj
+        IncrementSendIndexPressed = Rgb.WHITE
+        IncrementSendIndex = Rgb.WHITE_HALF
+
+    class DawControlButtonModes:
+
+        class Solo:
+            On = Rgb.BLUE
+
+        class Arm:
+            On = Rgb.RED
+
+    class DawMixerButtonModes:
+
+        class Mute:
+            On = Rgb.ORANGE
+
+        class TrackSelect:
+            On = Rgb.WHITE
+
+=========================================
+FILE: transport.py
+=========================================
+# Decompiled with PyLingual (https://pylingual.io)
+# Internal filename: output/Live/mac_universal_64_static/Release/python-bundle/MIDI Remote Scripts/Launch_Control_XL_3/transport.py
+# Bytecode version: 3.11a7e (3495)
+# Source timestamp: 2025-07-27 22:17:50 UTC (1753654670)
+
+from Launchkey_MK4.transport import InternalParameterControl
+from Launchkey_MK4.transport import TransportComponent as TransportComponentBase
+from Launchkey_MK4.transport import register_internal_parameter
+
+class TransportComponent(TransportComponentBase):
+    pass
+    loop_toggle_encoder = InternalParameterControl()
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.loop_toggle_encoder.parameter = register_internal_parameter(self, 'Loop', lambda _: '{}'.format('On' if self.song.loop else 'Off'))
+
+    @loop_toggle_encoder.value
+    def loop_toggle_encoder(self, value, _):
+        toggle_on = value > 0
+        if self.song.loop != toggle_on:
+            self.song.loop = toggle_on
+

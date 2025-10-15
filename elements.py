@@ -36,7 +36,12 @@ class Elements(ElementsBase):
         self.add_button_matrix([range(5, 13)], 'Fader_Touch_Elements', channels=14, is_private=True)
         self.add_matrix([range(77, 85), range(85, 93)], 'Upper_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
         self.add_matrix([range(93, 101)], 'Lower_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
+        
+        # Create combined encoder matrix for device control (all 24 encoders)
+        self.add_matrix([range(77, 85), range(85, 93), range(93, 101)], 'All_Device_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
+        
         self.add_button_matrix([range(77, 101)], 'Encoder_Touch_Elements', channels=14, is_private=True)
+        
         self.add_sysex_element(midi.make_connection_message()[:-2], 'Connection_Element')
         self.add_display_command_for_target('Static', 53, 9)
         self.add_display_command_for_target('Temp', 54, 3, disable_caching=True)

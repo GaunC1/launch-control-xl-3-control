@@ -40,26 +40,45 @@ class ColoredEncoderElement(EncoderElement):
         super().__init__(*a, **k)
         self._led_color_cc = self.message_identifier() - 64
         self._is_assigned_to_pan = False
+        self._last_sent_message = None
 
     def reset(self):
         self._send_led_color(Rgb.OFF)
 
-    def _update_parameter_listeners(self):
+    def connect_to(self, parameter):
+        # Called when encoder is connected to a parameter
+        super().connect_to(parameter)
+        # Force LED update after connection
+        self._update_led_color()
+
+    def release_parameter(self):
+        # Called when encoder is disconnected from a parameter
+        super().release_parameter()
+        # Turn off LED when released
+        self._send_led_color(Rgb.OFF)
+
+    def _update_led_color(self):
+        # Update LED based on current parameter mapping
         self._is_assigned_to_pan = False
         if self.is_mapped_to_parameter():
             self._is_assigned_to_pan = self.mapped_object.name == 'Track Panning'
             if not self._is_assigned_to_pan:
                 self._send_led_color(get_color_for_parameter(self.mapped_object))
+            else:
+                self._send_led_color(get_color_for_pan_value(self.parameter_value))
         else:
             self._send_led_color(Rgb.OFF)
+
+    def _update_parameter_listeners(self):
+        self._update_led_color()
         super()._update_parameter_listeners()
 
     def _send_led_color(self, color):
         message = (CC_STATUS, self._led_color_cc, color.midi_value)
-        if message != self._last_sent_message:
-            self.send_midi(message)
-            self._last_sent_message = message
+        self.send_midi(message)
+        self._last_sent_message = message
 
     def _parameter_value_changed(self):
         if self._is_assigned_to_pan:
             self._send_led_color(get_color_for_pan_value(self.parameter_value))
+        super()._parameter_value_changed()

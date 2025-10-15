@@ -17,4 +17,4 @@ class DeviceComponent(DeviceComponentBase):
     pass
 
     def __init__(self, *a, **k):
-        super().__init__(*a, bank_size=16, bank_navigation_component_type=DeviceBankNavigationComponent, quantized_parameter_sensitivity=0.5, **k)
+        super().__init__(*a, bank_size=24, bank_navigation_component_type=DeviceBankNavigationComponent, quantized_parameter_sensitivity=0.5, **k)
