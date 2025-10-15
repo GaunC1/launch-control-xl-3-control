@@ -67,9 +67,18 @@ def _row_index_from_cc(cc):
     return 0
 
 def _page_index_from_bank_index(bank_index: int) -> int:
-    # Based on observation: page 1 shows banks 1,2,3 (start index 0)
-    # and page 2 shows banks 2,3,4 (start index 1). Treat any non-zero as page 2.
-    return 0 if (bank_index or 0) == 0 else 1
+    """Map device bank index to page.
+
+    - Page 1 covers banks 1–3 => indices 0–2
+    - Page 2 covers banks 4–6 => indices 3–5
+
+    Clamp to 0/1 since we only style two pages.
+    """
+    try:
+        i = int(bank_index or 0)
+    except Exception:
+        i = 0
+    return 0 if i < 3 else 1
 
 def _device_column_color_for_cc(cc):
     col = _column_index_from_cc(cc)
