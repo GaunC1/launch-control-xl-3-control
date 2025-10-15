@@ -11,12 +11,27 @@ from ableton.v3.control_surface.midi import CC_STATUS
 from .colors import Rgb
 
 def get_color_for_parameter(parameter):
-    # Force GREEN for debugging palette behavior across all mappings
-    return Rgb.GREEN
+    # Original mapping by parameter context
+    parent = parameter.canonical_parent
+    if isinstance(parent, (Device, LiveObjectDecorator)):
+        return Rgb.PURPLE
+    if isinstance(parent, MixerDevice):
+        return Rgb.TURQUOISE
+    if 'Loop' in parameter.name:
+        return Rgb.YELLOW
+    if 'Vertical' in parameter.name:
+        return Rgb.TURQUOISE
+    if 'Tempo' in parameter.name:
+        return Rgb.ORANGE
+    return Rgb.WHITE
 
 def get_color_for_pan_value(value):
-    # Force GREEN for debugging palette behavior (ignore L/R hue)
-    return Rgb.GREEN
+    # Original pan mapping: orange for R, dark blue for L, white-half for center
+    if 'R' in value:
+        return Rgb.ORANGE
+    if 'L' in value:
+        return Rgb.DARK_BLUE
+    return Rgb.WHITE_HALF
 
 class ColoredEncoderElement(EncoderElement):
     pass
