@@ -57,6 +57,18 @@ def _column_index_from_cc(cc):
         return cc - 93
     return 0
 
+def _device_column_color_for_cc(cc):
+    col = _column_index_from_cc(cc)
+    bank_is_2 = (current_device_bank_index % 2 == 1)
+    bank_colors = _BANK1_COLUMN_COLORS if not bank_is_2 else _BANK2_COLUMN_COLORS
+    # Special-case: bottom encoder of column 5 is white in Bank 2
+    if bank_is_2 and (93 <= cc <= 100) and col == 4:
+        return Rgb.WHITE
+    try:
+        return bank_colors[col]
+    except Exception:
+        return Rgb.WHITE
+
 def get_color_for_parameter(parameter):
     # Original mapping by parameter context
     parent = parameter.canonical_parent
@@ -99,8 +111,15 @@ class ColoredEncoderElement(EncoderElement):
         if self.is_mapped_to_parameter():
             self._is_assigned_to_pan = self.mapped_object.name == 'Track Panning'
             if not self._is_assigned_to_pan:
-                base = get_color_for_parameter(self.mapped_object)
-                self._send_led_color(base)
+                # If controlling a Device parameter, use per-column colors by CC
+                try:
+                    parent = self.mapped_object.canonical_parent
+                except Exception:
+                    parent = None
+                if isinstance(parent, (Device, LiveObjectDecorator)):
+                    self._send_led_color(_device_column_color_for_cc(self.message_identifier()))
+                else:
+                    self._send_led_color(get_color_for_parameter(self.mapped_object))
             else:
                 self._send_led_color(get_color_for_pan_value(self.parameter_value))
 
@@ -119,7 +138,15 @@ class ColoredEncoderElement(EncoderElement):
             if self._is_assigned_to_pan:
                 self._send_led_color(get_color_for_pan_value(self.parameter_value))
             else:
-                self._send_led_color(get_color_for_parameter(self.mapped_object))
+                # Keep asserting per-column color for device params while twisting
+                try:
+                    parent = self.mapped_object.canonical_parent
+                except Exception:
+                    parent = None
+                if isinstance(parent, (Device, LiveObjectDecorator)):
+                    self._send_led_color(_device_column_color_for_cc(self.message_identifier()))
+                else:
+                    self._send_led_color(get_color_for_parameter(self.mapped_object))
         super()._parameter_value_changed()
 
     # No dynamic brightness modulation; use palette indices only
@@ -142,17 +169,7 @@ class DeviceColoredEncoderElement(ColoredEncoderElement):
         self._send_led_color(Rgb.OFF)
 
     def _device_column_color(self):
-        cc = self.message_identifier()
-        col = _column_index_from_cc(cc)
-        bank_is_2 = (current_device_bank_index % 2 == 1)
-        bank_colors = _BANK1_COLUMN_COLORS if not bank_is_2 else _BANK2_COLUMN_COLORS
-        # Special-case: bottom encoder of column 5 is white in Bank 2
-        if bank_is_2 and (93 <= cc <= 100) and col == 4:
-            return Rgb.WHITE
-        try:
-            return bank_colors[col]
-        except Exception:
-            return Rgb.WHITE
+        return _device_column_color_for_cc(self.message_identifier())
 
     def _update_led_color(self):
         # Override to use per-column color mapping in Device mode
