@@ -10,6 +10,44 @@ from ableton.v3.control_surface.elements import EncoderElement
 from ableton.v3.control_surface.midi import CC_STATUS
 from .colors import Rgb
 
+# Track current device bank (page) for DAW Control mode. Updated by device.py
+current_device_bank_index = 0
+
+def set_device_bank_index(index: int):
+    global current_device_bank_index
+    try:
+        current_device_bank_index = int(index) if index is not None else 0
+    except Exception:
+        current_device_bank_index = 0
+
+# Per-column color mappings (columns of 3 encoders form a column; 8 columns total)
+# Bank 1 – Channel EQ + Dynamics
+# 1: HF -> Red, 2: HMF -> Green, 3: LMF -> Blue, 4: LF -> Dark Blue,
+# 5: Filters -> Purple, 6: Comp1 -> Yellow, 7: Comp2 -> Yellow, 8: Master -> Amber
+_BANK1_COLUMN_COLORS = (
+    Rgb.RED,          # col 1
+    Rgb.GREEN,        # col 2
+    Rgb.BLUE,         # col 3
+    Rgb.DARK_BLUE,    # col 4
+    Rgb.PURPLE,       # col 5
+    Rgb.YELLOW,       # col 6
+    Rgb.YELLOW,       # col 7
+    Rgb.ORANGE_HALF   # col 8 (amber)
+)
+
+# Bank 2 – placeholder (use Bank 1 mapping until specified)
+_BANK2_COLUMN_COLORS = _BANK1_COLUMN_COLORS
+
+def _column_index_from_cc(cc):
+    # CC ranges: 77-84 (upper row 1), 85-92 (upper row 2), 93-100 (lower row)
+    if 77 <= cc <= 84:
+        return cc - 77
+    if 85 <= cc <= 92:
+        return cc - 85
+    if 93 <= cc <= 100:
+        return cc - 93
+    return 0
+
 def get_color_for_parameter(parameter):
     # Original mapping by parameter context
     parent = parameter.canonical_parent
@@ -93,6 +131,26 @@ class DeviceColoredEncoderElement(ColoredEncoderElement):
         super().release_parameter()
         # Turn off unused slot so only mapped params are lit
         self._send_led_color(Rgb.OFF)
+
+    def _device_column_color(self):
+        cc = self.message_identifier()
+        col = _column_index_from_cc(cc)
+        bank_colors = _BANK1_COLUMN_COLORS if current_device_bank_index % 2 == 0 else _BANK2_COLUMN_COLORS
+        try:
+            return bank_colors[col]
+        except Exception:
+            return Rgb.WHITE
+
+    def _update_led_color(self):
+        # Override to use per-column color mapping in Device mode
+        if self.is_mapped_to_parameter():
+            self._send_led_color(self._device_column_color())
+
+    def _parameter_value_changed(self):
+        # Keep color stable in Device mode (no brightness modulation)
+        if self.is_mapped_to_parameter():
+            self._send_led_color(self._device_column_color())
+        super()._parameter_value_changed()
 
 
 class MixerColoredEncoderElement(ColoredEncoderElement):
