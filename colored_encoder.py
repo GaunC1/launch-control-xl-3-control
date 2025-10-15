@@ -52,7 +52,8 @@ class ColoredEncoderElement(EncoderElement):
         if self.is_mapped_to_parameter():
             self._is_assigned_to_pan = self.mapped_object.name == 'Track Panning'
             if not self._is_assigned_to_pan:
-                self._send_led_color(get_color_for_parameter(self.mapped_object))
+                base = get_color_for_parameter(self.mapped_object)
+                self._send_led_color(self._color_with_brightness(base))
             else:
                 self._send_led_color(get_color_for_pan_value(self.parameter_value))
 
@@ -71,6 +72,38 @@ class ColoredEncoderElement(EncoderElement):
             self._send_led_color(get_color_for_pan_value(self.parameter_value))
         super()._parameter_value_changed()
 
+    def _normalized_value(self):
+        try:
+            p = self.mapped_object
+            rng = (getattr(p, 'max', None) or 1.0) - (getattr(p, 'min', None) or 0.0)
+            if rng:
+                return (float(getattr(p, 'value', 0.0)) - (getattr(p, 'min', 0.0))) / rng
+        except Exception:
+            pass
+        return None
+
+    def _half_variant(self, color):
+        # Map base color to a dim variant where available; otherwise approximate
+        half_map = {
+            Rgb.WHITE: Rgb.WHITE_HALF,
+            Rgb.GREEN: Rgb.GREEN_HALF,
+            Rgb.RED: Rgb.RED_HALF,
+            Rgb.BLUE: Rgb.BLUE_HALF,
+            Rgb.ORANGE: Rgb.ORANGE_HALF,
+            Rgb.DARK_BLUE: Rgb.BLUE_HALF,
+            Rgb.TURQUOISE: Rgb.BLUE_HALF,
+            Rgb.PURPLE: Rgb.WHITE_HALF,
+            Rgb.YELLOW: Rgb.ORANGE_HALF,
+        }
+        return half_map.get(color, color)
+
+    def _color_with_brightness(self, base_color):
+        norm = self._normalized_value()
+        if norm is None:
+            return base_color
+        # Simple 2-step modulation: < 0.5 => half, >= 0.5 => full
+        return self._half_variant(base_color) if norm < 0.5 else base_color
+
 
 class DeviceColoredEncoderElement(ColoredEncoderElement):
     """Encoder for Device mode.
@@ -85,8 +118,8 @@ class DeviceColoredEncoderElement(ColoredEncoderElement):
     def release_parameter(self):
         # Called when this slot has no parameter in the current device bank
         super().release_parameter()
-        # Dim unused slot so only mapped params are fully lit
-        self._send_led_color(Rgb.WHITE_HALF)
+        # Turn off unused slot so only mapped params are lit
+        self._send_led_color(Rgb.OFF)
 
 
 class MixerColoredEncoderElement(ColoredEncoderElement):
@@ -100,4 +133,4 @@ class MixerColoredEncoderElement(ColoredEncoderElement):
 
     def release_parameter(self):
         super().release_parameter()
-        self._send_led_color(Rgb.WHITE_HALF)
+        self._send_led_color(Rgb.OFF)
