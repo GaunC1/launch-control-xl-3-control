@@ -166,6 +166,12 @@ class DeviceColoredEncoderElement(ColoredEncoderElement):
         if self.is_mapped_to_parameter():
             self._send_led_color(self._device_column_color())
 
+    def _send_led_color(self, color):
+        # Force per-column color in Device mode to override any default writes
+        if color is not Rgb.OFF and self.is_mapped_to_parameter():
+            color = self._device_column_color()
+        super()._send_led_color(color)
+
     def connect_to(self, parameter):
         # Ensure our column color overrides any default color update during mapping
         super().connect_to(parameter)
