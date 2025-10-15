@@ -36,7 +36,16 @@ _BANK1_COLUMN_COLORS = (
 )
 
 # Bank 2 – placeholder (use Bank 1 mapping until specified)
-_BANK2_COLUMN_COLORS = _BANK1_COLUMN_COLORS
+_BANK2_COLUMN_COLORS = (
+    Rgb.GREEN,        # col 1: Gate/Exp Threshold
+    Rgb.GREEN_HALF,   # col 2: Gate/Exp Attack/Release
+    Rgb.WHITE_HALF,   # col 3: Quick Access (1–3)
+    Rgb.WHITE,        # col 4: Quick Access (4–6)
+    Rgb.YELLOW,       # col 5: Misc (Phase / Filter / Dyn 1)
+    Rgb.YELLOW,       # col 6: Misc (2)
+    Rgb.YELLOW,       # col 7: Misc (3)
+    Rgb.YELLOW        # col 8: Misc (4)
+)
 
 def _column_index_from_cc(cc):
     # CC ranges: 77-84 (upper row 1), 85-92 (upper row 2), 93-100 (lower row)
@@ -135,7 +144,11 @@ class DeviceColoredEncoderElement(ColoredEncoderElement):
     def _device_column_color(self):
         cc = self.message_identifier()
         col = _column_index_from_cc(cc)
-        bank_colors = _BANK1_COLUMN_COLORS if current_device_bank_index % 2 == 0 else _BANK2_COLUMN_COLORS
+        bank_is_2 = (current_device_bank_index % 2 == 1)
+        bank_colors = _BANK1_COLUMN_COLORS if not bank_is_2 else _BANK2_COLUMN_COLORS
+        # Special-case: bottom encoder of column 5 is white in Bank 2
+        if bank_is_2 and (93 <= cc <= 100) and col == 4:
+            return Rgb.WHITE
         try:
             return bank_colors[col]
         except Exception:
