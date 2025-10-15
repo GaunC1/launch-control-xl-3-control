@@ -7,7 +7,7 @@ from ableton.v3.base import nop
 from ableton.v3.control_surface import ElementsBase, MapMode
 from Launchkey_MK4.display_target import DisplayTargetElement
 from . import midi
-from .colored_encoder import ColoredEncoderElement
+from .colored_encoder import DeviceColoredEncoderElement, MixerColoredEncoderElement
 
 class Elements(ElementsBase):
 
@@ -34,11 +34,11 @@ class Elements(ElementsBase):
         self.add_modified_control(control=self.page_down_button, modifier=self.shift_button)
         self.add_encoder_matrix([range(5, 13)], 'Faders', channels=15)
         self.add_button_matrix([range(5, 13)], 'Fader_Touch_Elements', channels=14, is_private=True)
-        self.add_matrix([range(77, 85), range(85, 93)], 'Upper_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
-        self.add_matrix([range(93, 101)], 'Lower_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
+        self.add_matrix([range(77, 85), range(85, 93)], 'Upper_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=MixerColoredEncoderElement)
+        self.add_matrix([range(93, 101)], 'Lower_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=MixerColoredEncoderElement)
         
         # Create combined encoder matrix for device control (all 24 encoders)
-        self.add_matrix([range(77, 85), range(85, 93), range(93, 101)], 'All_Device_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=ColoredEncoderElement)
+        self.add_matrix([range(77, 85), range(85, 93), range(93, 101)], 'All_Device_Encoders', map_mode=MapMode.LinearBinaryOffset, channels=15, element_factory=DeviceColoredEncoderElement)
         
         self.add_button_matrix([range(77, 101)], 'Encoder_Touch_Elements', channels=14, is_private=True)
         

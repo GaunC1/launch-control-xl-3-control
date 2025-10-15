@@ -70,3 +70,34 @@ class ColoredEncoderElement(EncoderElement):
         if self._is_assigned_to_pan:
             self._send_led_color(get_color_for_pan_value(self.parameter_value))
         super()._parameter_value_changed()
+
+
+class DeviceColoredEncoderElement(ColoredEncoderElement):
+    """Encoder for Device mode.
+    - Does not clear LEDs on reset (mode switch)
+    - Dims to half when a slot is unmapped within the active device bank
+    """
+
+    def reset(self):
+        # Avoid clearing LEDs when leaving mode; mixer will take over visuals
+        pass
+
+    def release_parameter(self):
+        # Called when this slot has no parameter in the current device bank
+        super().release_parameter()
+        # Dim unused slot so only mapped params are fully lit
+        self._send_led_color(Rgb.WHITE_HALF)
+
+
+class MixerColoredEncoderElement(ColoredEncoderElement):
+    """Encoder for Mixer mode.
+    - Does not clear LEDs on reset (mode switch)
+    - Dims when a send slot is unused
+    """
+
+    def reset(self):
+        pass
+
+    def release_parameter(self):
+        super().release_parameter()
+        self._send_led_color(Rgb.WHITE_HALF)
