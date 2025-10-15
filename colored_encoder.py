@@ -43,19 +43,8 @@ class ColoredEncoderElement(EncoderElement):
         self._last_sent_message = None
 
     def reset(self):
-        self._send_led_color(Rgb.OFF)
-
-    def connect_to(self, parameter):
-        # Called when encoder is connected to a parameter
-        super().connect_to(parameter)
-        # Force LED update after connection
-        self._update_led_color()
-
-    def release_parameter(self):
-        # Called when encoder is disconnected from a parameter
-        super().release_parameter()
-        # Turn off LED when released
-        self._send_led_color(Rgb.OFF)
+        # Avoid clearing LEDs on layer changes; active duplicate may own the CC
+        pass
 
     def _update_led_color(self):
         # Update LED based on current parameter mapping
@@ -66,8 +55,6 @@ class ColoredEncoderElement(EncoderElement):
                 self._send_led_color(get_color_for_parameter(self.mapped_object))
             else:
                 self._send_led_color(get_color_for_pan_value(self.parameter_value))
-        else:
-            self._send_led_color(Rgb.OFF)
 
     def _update_parameter_listeners(self):
         self._update_led_color()
@@ -75,8 +62,9 @@ class ColoredEncoderElement(EncoderElement):
 
     def _send_led_color(self, color):
         message = (CC_STATUS, self._led_color_cc, color.midi_value)
-        self.send_midi(message)
-        self._last_sent_message = message
+        if message != self._last_sent_message:
+            self.send_midi(message)
+            self._last_sent_message = message
 
     def _parameter_value_changed(self):
         if self._is_assigned_to_pan:
