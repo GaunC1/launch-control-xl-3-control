@@ -68,8 +68,14 @@ class ColoredEncoderElement(EncoderElement):
             self._last_sent_message = message
 
     def _parameter_value_changed(self):
-        if self._is_assigned_to_pan:
-            self._send_led_color(get_color_for_pan_value(self.parameter_value))
+        if self.is_mapped_to_parameter():
+            if self._is_assigned_to_pan:
+                # Keep pan color mapping
+                self._send_led_color(get_color_for_pan_value(self.parameter_value))
+            else:
+                # Update brightness as the parameter value changes
+                base = get_color_for_parameter(self.mapped_object)
+                self._send_led_color(self._color_with_brightness(base))
         super()._parameter_value_changed()
 
     def _normalized_value(self):
