@@ -76,8 +76,8 @@ def _device_column_color_for_cc(cc):
     row = _row_index_from_cc(cc)
     page = _page_index_from_bank_index(current_device_bank_index)
     bank_colors = _BANK1_COLUMN_COLORS if page == 0 else _BANK2_COLUMN_COLORS
-    # Special-case: on Page 2 (banks 2–4), bottom of column 5 is WHITE
-    if page == 1 and row == 2 and col == 4:
+    # Special-case: on Page 1 (banks 1–3), bottom of column 5 is WHITE
+    if page == 0 and row == 2 and col == 4:
         return Rgb.WHITE
     try:
         return bank_colors[col]
