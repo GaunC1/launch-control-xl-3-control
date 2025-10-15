@@ -57,12 +57,27 @@ def _column_index_from_cc(cc):
         return cc - 93
     return 0
 
+def _row_index_from_cc(cc):
+    if 77 <= cc <= 84:
+        return 0  # top
+    if 85 <= cc <= 92:
+        return 1  # middle
+    if 93 <= cc <= 100:
+        return 2  # bottom
+    return 0
+
+def _page_index_from_bank_index(bank_index: int) -> int:
+    # Based on observation: page 1 shows banks 1,2,3 (start index 0)
+    # and page 2 shows banks 2,3,4 (start index 1). Treat any non-zero as page 2.
+    return 0 if (bank_index or 0) == 0 else 1
+
 def _device_column_color_for_cc(cc):
     col = _column_index_from_cc(cc)
-    bank_is_2 = (current_device_bank_index % 2 == 1)
-    bank_colors = _BANK1_COLUMN_COLORS if not bank_is_2 else _BANK2_COLUMN_COLORS
-    # Special-case: bottom encoder of column 5 is white in Bank 2
-    if bank_is_2 and (93 <= cc <= 100) and col == 4:
+    row = _row_index_from_cc(cc)
+    page = _page_index_from_bank_index(current_device_bank_index)
+    bank_colors = _BANK1_COLUMN_COLORS if page == 0 else _BANK2_COLUMN_COLORS
+    # Special-case: on Page 2 (banks 2–4), bottom of column 5 is WHITE
+    if page == 1 and row == 2 and col == 4:
         return Rgb.WHITE
     try:
         return bank_colors[col]
