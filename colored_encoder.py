@@ -147,10 +147,11 @@ class DeviceColoredEncoderElement(ColoredEncoderElement):
             self._send_led_color(self._device_column_color())
 
     def _parameter_value_changed(self):
-        # Keep color stable in Device mode (no brightness modulation)
+        # Let base handle notifications/updates first (may set default color),
+        # then assert our per-column color so it wins over PURPLE defaults.
+        super()._parameter_value_changed()
         if self.is_mapped_to_parameter():
             self._send_led_color(self._device_column_color())
-        super()._parameter_value_changed()
 
     def connect_to(self, parameter):
         # Ensure our column color overrides any default color update during mapping
