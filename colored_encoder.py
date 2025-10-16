@@ -28,7 +28,7 @@ _BANK1_COLUMN_COLORS = (
     Rgb.RED,          # col 1
     Rgb.GREEN,        # col 2
     Rgb.BLUE,         # col 3
-    Rgb.DARK_BLUE,    # col 4
+    Rgb.BROWN,        # col 4 (changed to Brown)
     Rgb.PURPLE,       # col 5
     Rgb.YELLOW,       # col 6
     Rgb.YELLOW,       # col 7
