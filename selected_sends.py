@@ -12,6 +12,7 @@ class SelectedSendsComponent(Component):
         super().__init__(*a, **k)
         self._target_track = target_track
         self._send_controls = []
+        self._value_listeners = []
         # React when selected/target track changes
         self.register_slot(self._target_track, self._on_target_track_changed, 'target_track')
         self._on_target_track_changed()
@@ -32,6 +33,13 @@ class SelectedSendsComponent(Component):
                 c.resource.release(self)
             except Exception:
                 pass
+        # Remove value listeners
+        for ctl, cb in self._value_listeners:
+            try:
+                ctl.remove_value_listener(cb)
+            except Exception:
+                pass
+        self._value_listeners[:] = []
 
     def _update_connections(self):
         if not self._send_controls:
@@ -52,7 +60,31 @@ class SelectedSendsComponent(Component):
                 try:
                     # Claim the control so this component owns it in this mode
                     control.resource.grab(self)
+                    # Try standard parameter mapping first
                     control.connect_to(param)
+                    # Also add a direct value listener fallback to nudge parameter,
+                    # in case host mapping does not take over for these elements.
+                    def _make_cb(p):
+                        def _on_value(val):
+                            try:
+                                # LinearBinaryOffset: val 65..127 increment, 1..63 decrement, 0/64 neutral
+                                if val == 0 or val == 64:
+                                    return
+                                rng = float(getattr(p, 'max', 1.0) - getattr(p, 'min', 0.0)) or 1.0
+                                step = rng * 0.01
+                                if val > 64:
+                                    p.value = min(p.max, p.value + step)
+                                else:
+                                    p.value = max(p.min, p.value - step)
+                            except Exception:
+                                pass
+                        return _on_value
+                    cb = _make_cb(param)
+                    try:
+                        control.add_value_listener(cb)
+                        self._value_listeners.append((control, cb))
+                    except Exception:
+                        pass
                 except Exception:
                     pass
             else:
