@@ -28,6 +28,8 @@ class SelectedSendsComponent(Component):
         for c in self._send_controls:
             try:
                 c.release_parameter()
+                # Release the element's resource so other modes can own it
+                c.resource.release(self)
             except Exception:
                 pass
 
@@ -48,6 +50,14 @@ class SelectedSendsComponent(Component):
                 param = None
             if liveobj_valid(param):
                 try:
+                    # Claim the control so this component owns it in this mode
+                    control.resource.grab(self)
                     control.connect_to(param)
+                except Exception:
+                    pass
+            else:
+                # If no corresponding send, ensure control is released
+                try:
+                    control.release_parameter()
                 except Exception:
                     pass
