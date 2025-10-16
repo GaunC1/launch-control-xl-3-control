@@ -1,6 +1,7 @@
 # Decompiled helper component created for mapping faders to selected-track sends
 
-from ableton.v3.base import depends, flatten, liveobj_valid
+from ableton.v3.base import depends, flatten
+from ableton.v3.live import liveobj_valid
 from ableton.v3.control_surface import Component
 
 
@@ -50,4 +51,3 @@ class SelectedSendsComponent(Component):
                     control.connect_to(param)
                 except Exception:
                     pass
-
