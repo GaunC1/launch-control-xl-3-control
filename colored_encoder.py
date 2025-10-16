@@ -25,14 +25,14 @@ def set_device_bank_index(index: int):
 # 1: HF -> Red, 2: HMF -> Green, 3: LMF -> Blue, 4: LF -> Dark Blue,
 # 5: Filters -> Purple, 6: Comp1 -> Yellow, 7: Comp2 -> Yellow, 8: Master -> Amber
 _BANK1_COLUMN_COLORS = (
-    Rgb.RED,          # col 1
-    Rgb.GREEN,        # col 2
-    Rgb.BLUE,         # col 3
-    Rgb.from_index(121),  # col 4 (palette index 121)
-    Rgb.PURPLE,       # col 5
-    Rgb.YELLOW,       # col 6
-    Rgb.YELLOW,       # col 7
-    Rgb.ORANGE_HALF   # col 8 (amber)
+    Rgb.from_index(120),  # col 1
+    Rgb.from_index(123),  # col 2
+    Rgb.from_index(37),   # col 3
+    Rgb.from_index(11),   # col 4
+    Rgb.PURPLE,           # col 5
+    Rgb.YELLOW,           # col 6
+    Rgb.YELLOW,           # col 7
+    Rgb.ORANGE_HALF       # col 8 (amber)
 )
 
 # Bank 2 – placeholder (use Bank 1 mapping until specified)
