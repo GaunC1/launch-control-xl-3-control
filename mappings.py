@@ -29,5 +29,30 @@ def create_mappings(control_surface):
     mappings['Encoder_Touch'] = dict(touch_controls='encoder_touch_elements')
     mappings['Daw_Control_Button_Modes'] = dict(cycle_mode_button='daw_control_mode_button', solo=dict(component='Mixer', solo_buttons='daw_control_buttons'), arm=dict(component='Mixer', arm_buttons='daw_control_buttons'))
     mappings['Daw_Mixer_Button_Modes'] = dict(cycle_mode_button='daw_mixer_mode_button', mute=dict(component='Mixer', mute_buttons='daw_mixer_buttons'), track_select=dict(component='Mixer', track_select_buttons='daw_mixer_buttons'))
-    mappings['Encoder_Modes'] = dict(modes_component_type=LaunchkeyModesComponent, is_private=True, mode_selection_control='encoder_mode_element', null_0=None, daw_mixer=dict(modes=[dict(component='Mixer', send_controls='upper_encoders', pan_controls='lower_encoders', prev_send_index_button='page_up_button', next_send_index_button='page_down_button'), set_relative_encoder_mode(control_surface)], behaviour=make_relative_encoder_mode_behavior(control_surface)), daw_control=dict(modes=[dict(component='Device', parameter_controls='all_device_encoders', prev_bank_button='page_up_button', next_bank_button='page_down_button'), dict(component='Device_Navigation', prev_button='page_up_button_with_shift', next_button='page_down_button_with_shift'), set_relative_encoder_mode(control_surface)], behaviour=make_relative_encoder_mode_behavior(control_surface)), null_3=None, null_4=None, null_5=None, null_6=None, null_7=None, null_8=None)
+    mappings['Encoder_Modes'] = dict(
+        modes_component_type=LaunchkeyModesComponent,
+        is_private=True,
+        mode_selection_control='encoder_mode_element',
+        null_0=None,
+        daw_mixer=dict(
+            modes=[
+                dict(component='Mixer', send_controls='upper_encoders', pan_controls='lower_encoders', prev_send_index_button='page_up_button', next_send_index_button='page_down_button'),
+                set_relative_encoder_mode(control_surface)
+            ],
+            behaviour=make_relative_encoder_mode_behavior(control_surface)
+        ),
+        daw_control=dict(
+            modes=[
+                # Map device parameters to all 24 encoders
+                dict(component='Device', parameter_controls='all_device_encoders', prev_bank_button='page_up_button', next_bank_button='page_down_button'),
+                # Also map faders to channel sends (A–H) across tracks at current send index
+                dict(component='Mixer', send_controls='faders'),
+                # Device navigation with shifted paging remains
+                dict(component='Device_Navigation', prev_button='page_up_button_with_shift', next_button='page_down_button_with_shift'),
+                set_relative_encoder_mode(control_surface)
+            ],
+            behaviour=make_relative_encoder_mode_behavior(control_surface)
+        ),
+        null_3=None, null_4=None, null_5=None, null_6=None, null_7=None, null_8=None
+    )
     return mappings
