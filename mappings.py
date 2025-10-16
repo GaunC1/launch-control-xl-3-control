@@ -23,9 +23,8 @@ def create_mappings(control_surface):
     mappings = {}
     mappings['Transport'] = dict(play_toggle_button='play_button', play_pause_button='play_button_with_shift')
     mappings['View_Based_Recording'] = dict(record_button='record_button')
-    # Remove global volume->faders mapping so DAW Control can repurpose faders.
-    # Volume will be mapped to faders within daw_mixer mode instead.
-    mappings['Mixer'] = dict()
+    # Restore faders controlling track volume globally
+    mappings['Mixer'] = dict(volume_controls='faders')
     mappings['View_Control'] = dict(prev_track_button='track_left_button', next_track_button='track_right_button')
     mappings['Session_Navigation'] = dict(page_left_button='track_left_button_with_shift', page_right_button='track_right_button_with_shift')
     mappings['Encoder_Touch'] = dict(touch_controls='encoder_touch_elements')
@@ -38,7 +37,7 @@ def create_mappings(control_surface):
         null_0=None,
         daw_mixer=dict(
             modes=[
-                dict(component='Mixer', volume_controls='faders', send_controls='upper_encoders', pan_controls='lower_encoders', prev_send_index_button='page_up_button', next_send_index_button='page_down_button'),
+                dict(component='Mixer', send_controls='upper_encoders', pan_controls='lower_encoders', prev_send_index_button='page_up_button', next_send_index_button='page_down_button'),
                 set_relative_encoder_mode(control_surface)
             ],
             behaviour=make_relative_encoder_mode_behavior(control_surface)
@@ -47,8 +46,6 @@ def create_mappings(control_surface):
             modes=[
                 # Map device parameters to all 24 encoders
                 dict(component='Device', parameter_controls='all_device_encoders', prev_bank_button='page_up_button', next_bank_button='page_down_button'),
-                # Map faders 1–8 to selected channel's sends 1–8
-                dict(component='Selected_Sends', send_controls='faders'),
                 # Device navigation with shifted paging remains
                 dict(component='Device_Navigation', prev_button='page_up_button_with_shift', next_button='page_down_button_with_shift'),
                 set_relative_encoder_mode(control_surface)
