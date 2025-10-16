@@ -19,6 +19,7 @@ from .session_navigation import SessionNavigationComponent
 from .session_ring import SessionRingComponent
 from .skin import Rgb, Skin
 from .transport import TransportComponent
+from .selected_sends import SelectedSendsComponent
 SYSEX_FLUSH_THRESHOLD = 10
 SYSEX_DISPLAY_ID_LENGTH = 9
 
@@ -38,7 +39,7 @@ class Specification(ControlSurfaceSpecification):
     hello_messages = (midi.make_connection_message(), midi.make_enable_touch_output_message())
     goodbye_messages = (midi.make_connection_message(connect=False),)
     display_specification = display_specification
-    component_map = {'Cue_Point': CuePointComponent, 'Device': DeviceComponent, 'Encoder_Touch': EncoderTouchComponent, 'Mixer': MixerComponent, 'Session_Navigation': SessionNavigationComponent, 'Transport': TransportComponent, 'Zoom': ZoomComponent}
+    component_map = {'Cue_Point': CuePointComponent, 'Device': DeviceComponent, 'Encoder_Touch': EncoderTouchComponent, 'Mixer': MixerComponent, 'Selected_Sends': SelectedSendsComponent, 'Session_Navigation': SessionNavigationComponent, 'Transport': TransportComponent, 'Zoom': ZoomComponent}
 
 class Launch_Control_XL_3(ControlSurface):
 

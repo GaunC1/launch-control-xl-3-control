@@ -45,8 +45,8 @@ def create_mappings(control_surface):
             modes=[
                 # Map device parameters to all 24 encoders
                 dict(component='Device', parameter_controls='all_device_encoders', prev_bank_button='page_up_button', next_bank_button='page_down_button'),
-                # Also map faders to channel sends (A–H) across tracks at current send index
-                dict(component='Mixer', send_controls='faders'),
+                # Map faders 1–8 to selected channel's sends 1–8
+                dict(component='Selected_Sends', send_controls='faders'),
                 # Device navigation with shifted paging remains
                 dict(component='Device_Navigation', prev_button='page_up_button_with_shift', next_button='page_down_button_with_shift'),
                 set_relative_encoder_mode(control_surface)
