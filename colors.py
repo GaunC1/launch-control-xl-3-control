@@ -39,3 +39,42 @@ class Rgb:
     PURPLE = SimpleColor(53)
     TURQUOISE = SimpleColor(39)
     DARK_BLUE = SimpleColor(47)
+
+    # Additional useful palette entries (from Novation palette chart)
+    AMBER = SimpleColor(84)
+    GOLD = SimpleColor(99)
+    LIME = SimpleColor(20)
+    TEAL = SimpleColor(34)
+    CYAN = SimpleColor(37)
+    SKY = SimpleColor(36)
+    INDIGO = SimpleColor(45)
+    MAGENTA = SimpleColor(55)
+    PINK = SimpleColor(57)
+    ROSE = SimpleColor(4)
+    SALMON = SimpleColor(60)
+    MINT = SimpleColor(25)
+    AQUA = SimpleColor(33)
+    SPRING_GREEN = SimpleColor(17)
+    OLIVE = SimpleColor(31)
+    BROWN = SimpleColor(11)
+    TAN = SimpleColor(8)
+    GREY = SimpleColor(118)
+
+    @staticmethod
+    @memoize
+    def from_index(index: int) -> SimpleColor:
+        """Return a SimpleColor for an arbitrary palette index (0..127).
+        Useful when you want a precise swatch from the Novation chart.
+        """
+        try:
+            idx = int(index)
+        except Exception:
+            idx = 0
+        idx = max(0, min(127, idx))
+        return SimpleColor(idx)
+
+    # Full palette access: Rgb.P[i] returns SimpleColor(i)
+    # Built once and memoized to avoid allocations at runtime
+    @memoize
+    def P():  # noqa: N802 (intentional short name for convenience)
+        return tuple(SimpleColor(i) for i in range(128))
