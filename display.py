@@ -65,9 +65,11 @@ class DisplayContent:
             upper_encoder_content = parameter_content(all_device_encoders_flat[:16], ControlType.upper_encoders)
             lower_encoder_content = parameter_content(all_device_encoders_flat[16:24], ControlType.lower_encoders)
         else:
-            # In DAW Mixer mode, use the separate encoder groups
+            # In DAW Mixer mode, upper encoders use Mixer group, but lower row
+            # transport/zoom/cue are assigned to the bottom 8 of All_Device_Encoders.
             upper_encoder_content = parameter_content(list(flatten(state.elements.upper_encoders)), ControlType.upper_encoders)
-            lower_encoder_content = parameter_content(state.elements.lower_encoders, ControlType.lower_encoders)
+            all_device_encoders_flat = list(flatten(state.elements.all_device_encoders))
+            lower_encoder_content = parameter_content(all_device_encoders_flat[16:24], ControlType.lower_encoders)
         
         return cls(upper_encoders=upper_encoder_content, lower_encoders=lower_encoder_content, faders=parameter_content(state.elements.faders, ControlType.faders), **k)
 

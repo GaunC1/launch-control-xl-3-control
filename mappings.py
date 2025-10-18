@@ -37,7 +37,18 @@ def create_mappings(control_surface):
         null_0=None,
         daw_mixer=dict(
             modes=[
-                dict(component='Mixer', send_controls='upper_encoders', pan_controls='lower_encoders', prev_send_index_button='page_up_button', next_send_index_button='page_down_button'),
+                # Keep upper encoders on sends; repurpose lower row to transport/zoom/cue
+                dict(component='Mixer', send_controls='upper_encoders', prev_send_index_button='page_up_button', next_send_index_button='page_down_button'),
+                dict(component='Transport',
+                     arrangement_position_encoder='all_device_encoders_raw[16]',
+                     loop_start_encoder='all_device_encoders_raw[19]',
+                     loop_length_encoder='all_device_encoders_raw[20]',
+                     loop_toggle_encoder='all_device_encoders_raw[21]',
+                     tempo_coarse_encoder='all_device_encoders_raw[23]'),
+                dict(component='Zoom',
+                     horizontal_zoom_encoder='all_device_encoders_raw[17]',
+                     vertical_zoom_encoder='all_device_encoders_raw[18]'),
+                dict(component='Cue_Point', encoder='all_device_encoders_raw[22]'),
                 set_relative_encoder_mode(control_surface)
             ],
             behaviour=make_relative_encoder_mode_behavior(control_surface)
