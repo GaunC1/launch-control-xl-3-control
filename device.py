@@ -11,30 +11,79 @@ class DeviceBankNavigationComponent(DeviceBankNavigationComponentBase):
     pass
     _adjusting_index = False
 
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        # Track last effective provider index to infer navigation direction
+        self._last_bank_index = None
+
     def _notify_bank_name(self):
-        # Navigation offset: skip raw bank index 2 and jump to 3 so that
-        # page 2 actually maps parameters 4/5/6 instead of 3/4/5.
+        # Strict non-overlapping pages: snap provider index to multiples of 3
+        # so pages become 0->1/2/3, 1->4/5/6, 2->7/8/9, ...
         try:
-            if not self._adjusting_index and self._bank_provider.index == 2:
-                self._adjusting_index = True
-                # Setting index triggers re-entry; let the next call handle display/notifications
-                self._bank_provider.index = 3
-                self._adjusting_index = False
-                return
+            if not self._adjusting_index:
+                requested = int(self._bank_provider.index)
+                snap = requested % 3
+                if snap != 0:
+                    forward = self._last_bank_index is None or requested > self._last_bank_index
+                    # Gather bounds for clamping
+                    try:
+                        total_windows = len(self._banking_info.device_bank_names(self._bank_provider.device, bank_name_join_str='\n'))
+                        max_index = max(0, total_windows - 1)
+                    except Exception:
+                        total_windows = None
+                        max_index = None
+                    desired = requested + (3 - snap) if forward else requested - snap
+                    if max_index is not None:
+                        if desired < 0:
+                            desired = 0
+                        if desired > max_index:
+                            desired = max_index - (max_index % 3)
+                    self._adjusting_index = True
+                    self._bank_provider.index = desired
+                    self._adjusting_index = False
         except Exception:
-            # If anything goes wrong, continue with default behaviour
             self._adjusting_index = False
 
-        bank_names = self._banking_info.device_bank_names(self._bank_provider.device, bank_name_join_str='\n')[self._bank_provider.index].split('\n')
-        self.notify(self.notifications.Device.bank, '{}\n{}\n{}'.format(self._bank_provider.device.name, bank_names[0], bank_names[1] if len(bank_names) > 1 else '-'))
-        # Update global bank index for encoder color mapping
+        # Query bank names for the current device using the active bank_size (24 in this script)
         try:
-            _encoder_colors.set_device_bank_index(self._bank_provider.index)
+            all_bank_names = self._banking_info.device_bank_names(self._bank_provider.device, bank_name_join_str='\n')
+        except Exception:
+            all_bank_names = []
+
+        try:
+            effective_index = self._bank_provider.index
+            bank_names = all_bank_names[effective_index].split('\n') if all_bank_names else []
+        except Exception:
+            bank_names = []
+
+        # Notify hardware display as before
+        try:
+            device_name = self._bank_provider.device.name
+        except Exception:
+            device_name = '-'
+        self.notify(self.notifications.Device.bank, '{}\n{}\n{}'.format(device_name, bank_names[0] if len(bank_names) > 0 else '-', bank_names[1] if len(bank_names) > 1 else '-'))
+
+        # Also show a debug message in Live's bottom status bar with total bank count
+        try:
+            total_banks = len(all_bank_names)
+            current_index = int(self._bank_provider.index) + 1 if total_banks else 0
+            sub_names = ' | '.join(bank_names) if bank_names else '-'
+            status_text = '{}: {} bank{} (page {}/{}) — sub-banks: {}'.format(
+                device_name, total_banks, '' if total_banks == 1 else 's', current_index, total_banks or 0, sub_names)
+            # show_message prints to Live's bottom bar
+            self.show_message(status_text)
         except Exception:
             pass
         # Update global bank index for encoder color mapping
         try:
             _encoder_colors.set_device_bank_index(self._bank_provider.index)
+        except Exception:
+            pass
+        # Update global bank index for encoder color mapping (duplicate avoided)
+
+        # Remember last effective index for direction inference next time
+        try:
+            self._last_bank_index = self._bank_provider.index
         except Exception:
             pass
 
