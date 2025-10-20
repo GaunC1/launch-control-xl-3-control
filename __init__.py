@@ -45,9 +45,6 @@ class Launch_Control_XL_3(ControlSurface):
     def __init__(self, *a, **k):
         self._should_delay_flushing_display_messages = False
         super().__init__(*a, **k)
-        # Listener state for selected device changes
-        self._selected_device_track = None
-        self._selected_track_listener_added = False
 
     def port_settings_changed(self):
         self._send_midi(midi.make_connection_message(connect=False))
@@ -62,8 +59,6 @@ class Launch_Control_XL_3(ControlSurface):
         super().on_identified(response_bytes)
         with self.component_guard():
             self.component_map['Encoder_Modes'].selected_mode = 'daw_mixer'
-        # Set up listeners for selected device changes to print bank count
-        self._setup_selected_device_bank_debug()
 
     def _flush_midi_messages(self):
         if self._should_delay_flushing_display_messages and len(self._midi_message_list) > SYSEX_FLUSH_THRESHOLD:
@@ -72,72 +67,3 @@ class Launch_Control_XL_3(ControlSurface):
                 self._tasks.add(task.sequence(task.delay(i * 0.01), task.run(self._do_send_midi, message)))
             self._midi_message_list[:] = []
         super()._flush_midi_messages()
-
-    # ---- Debug: show bank count for selected device in Live status bar ----
-
-    def _setup_selected_device_bank_debug(self):
-        try:
-            song = self.song()
-        except Exception:
-            return
-        try:
-            if not self._selected_track_listener_added:
-                song.view.add_selected_track_listener(self._on_selected_track_changed)
-                self._selected_track_listener_added = True
-        except Exception:
-            pass
-        # Initialize for current selection
-        self._on_selected_track_changed()
-
-    def _on_selected_track_changed(self):
-        try:
-            song = self.song()
-            track = song.view.selected_track
-        except Exception:
-            track = None
-        if track is not self._selected_device_track:
-            # Detach from previous
-            try:
-                if self._selected_device_track is not None:
-                    self._selected_device_track.view.remove_selected_device_listener(self._on_selected_device_changed)
-            except Exception:
-                pass
-            self._selected_device_track = track
-            try:
-                if track is not None:
-                    track.view.add_selected_device_listener(self._on_selected_device_changed)
-            except Exception:
-                pass
-        # Update immediately
-        self._on_selected_device_changed()
-
-    def _on_selected_device_changed(self):
-        try:
-            track = self._selected_device_track
-            device = track.view.selected_device if track is not None else None
-        except Exception:
-            device = None
-        if not device:
-            return
-        # Compute 24-param page count using the Device component's banking info
-        try:
-            device_component = self.component_map.get('Device')
-            all_bank_names = device_component._banking_info.device_bank_names(device, bank_name_join_str='\n') if device_component else []
-            total_banks = len(all_bank_names)
-            self.show_message('{}: {} bank{}'.format(device.name, total_banks, '' if total_banks == 1 else 's'))
-        except Exception:
-            pass
-
-    def disconnect(self):
-        # Cleanup listeners
-        try:
-            if self._selected_device_track is not None:
-                self._selected_device_track.view.remove_selected_device_listener(self._on_selected_device_changed)
-        except Exception:
-            pass
-        try:
-            if self._selected_track_listener_added:
-                self.song().view.remove_selected_track_listener(self._on_selected_track_changed)
-        except Exception:
-            pass
-        super().disconnect()
